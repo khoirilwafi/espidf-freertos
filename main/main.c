@@ -20,7 +20,10 @@ void read_serial_task(void *parameter)
 
         if (data_length > 0)
         {
+            // menambahkan ending teks
             read_buffer[data_length] = '\0';
+
+            // menampilkan teks
             printf("%d karakter diterima: %s\r\n", data_length, read_buffer);
         }
     }
