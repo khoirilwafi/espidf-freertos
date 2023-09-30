@@ -16,6 +16,7 @@
     "idf.toolsPathWin": "d:\\my_software\\ESPIDF5\\Espressif\\tools",
     "idf.portWin": "COM6",
     "files.associations": {
-        "freertos.h": "c"
+        "freertos.h": "c",
+        "serial_task.h": "c"
     }
 }
