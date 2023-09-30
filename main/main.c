@@ -2,6 +2,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "driver/uart.h"
+#include "driver/gpio.h"
 
 void read_serial_task(void *parameter)
 {
@@ -29,6 +30,14 @@ void read_serial_task(void *parameter)
     }
 }
 
+void blink_task(void *parameter)
+{
+    gpio_set_level(23, 0);
+    vTaskDelay(pdMS_TO_TICKS(500));
+    gpio_set_level(23, 1);
+    vTaskDelay(pdMS_TO_TICKS(500));
+}
+
 void app_main(void)
 {
     uart_config_t uart_config = {
@@ -44,5 +53,8 @@ void app_main(void)
     uart_set_pin(UART_NUM_0, 2, 3, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     uart_driver_install(UART_NUM_0, 1024, 0, 0, NULL, 0);
 
+    gpio_set_direction(23, GPIO_MODE_OUTPUT);
+
     xTaskCreate(read_serial_task, "serial task", 2048, NULL, 1, NULL);
+    xTaskCreate(blink_task, "blink task", 1024, NULL, 1, NULL);
 }
