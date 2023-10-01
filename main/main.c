@@ -1,55 +1,58 @@
 #include "stdio.h"
-#include "math.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
+#include "freertos/semphr.h"
 
-static QueueHandle_t msg_queue;
+int shared_resource = 0;
+static SemaphoreHandle_t mutex;
 
-void sender_task(void *parameter)
+void task_pertama(void *parameter)
 {
-    int number = 0;
-
     while (1)
     {
-        number = (int)random();
-
-        if (xQueueSend(msg_queue, (void *)&number, 0) == pdFALSE)
+        if (xSemaphoreTake(mutex, 0) == pdTRUE)
         {
-            printf("antrian penuh\r\n");
+            shared_resource++;
+            printf("task pertama - %d\r\n", shared_resource);
+
+            // misalnya pengolahan data memerlukan waktu 2 detik
+            vTaskDelay(pdMS_TO_TICKS(2000));
+
+            xSemaphoreGive(mutex);
         }
         else
         {
-            printf("%d berhasil terkirim\r\n", number);
+            printf("task pertama - shared resource sedang digunakan oleh task lain\r\n");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(500));
     }
 }
 
-void receiver_task(void *parameter)
+void task_kedua(void *parameter)
 {
-    int recv_number = 0;
-
     while (1)
     {
-        if (xQueueReceive(msg_queue, &recv_number, 0) == pdTRUE)
+        if (xSemaphoreTake(mutex, 0) == pdTRUE)
         {
-            printf("mendapatkan data dari antrian : %d\r\n", recv_number);
+            shared_resource++;
+            printf("task kedua   - %d\r\n", shared_resource);
+
+            xSemaphoreGive(mutex);
         }
         else
         {
-            printf("antrian kosong\r\n");
+            printf("task kedua   - shared resource sedang digunakan oleh task lain\r\n");
         }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
 void app_main(void)
 {
-    msg_queue = xQueueCreate(10, sizeof(int));
+    mutex = xSemaphoreCreateMutex();
 
-    xTaskCreate(sender_task, "sender", 2048, NULL, 1, NULL);
-    xTaskCreate(receiver_task, "receiver", 2048, NULL, 1, NULL);
+    xTaskCreate(task_pertama, "pertama", 2048, NULL, 1, NULL);
+    xTaskCreate(task_kedua, "kedua", 2048, NULL, 1, NULL);
 }
