@@ -1,65 +1,88 @@
 #include "stdio.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "driver/i2c.h"
+#include "driver/spi_master.h"
+#include "driver/gpio.h"
 
-void i2c_init(void)
+esp_err_t status;
+spi_device_handle_t spi;
+uint8_t number = 0;
+
+void meter_display(uint8_t channel, uint8_t value)
 {
-    // i2c configuration as master
-    i2c_config_t i2c_config = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = 21,
-        .scl_io_num = 22,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = 100000,
+    const uint8_t meter_index[9] = {
+        0xff,
+        0x7f,
+        0x3f,
+        0x1f,
+        0x0f,
+        0x07,
+        0x03,
+        0x01,
+        0x00,
     };
 
-    // send a configuration
-    i2c_param_config(I2C_NUM_0, &i2c_config);
-    // install i2c driver
-    i2c_driver_install(I2C_NUM_0, I2C_MODE_MASTER, 0, 0, 0);
+    uint8_t data[2] = {channel, meter_index[value]};
 
-    printf("i2c config done\r\n");
+    spi_transaction_t trx = {
+        .tx_buffer = data,
+        .length = 2 * 8,
+    };
+
+    status = spi_device_polling_transmit(spi, &trx);
+
+    if (status != ESP_OK)
+    {
+        printf("gagal mengirim data\r\n");
+    }
 }
 
 void app_main(void)
 {
-    i2c_init();
+    spi_bus_config_t spi_config = {
+        .miso_io_num = 19,
+        .mosi_io_num = 23,
+        .sclk_io_num = 18,
+        .max_transfer_sz = 3,
+    };
+
+    spi_device_interface_config_t shift_register = {
+        .clock_speed_hz = 100000,
+        .mode = 0,
+        .spics_io_num = 5,
+        .queue_size = 1,
+    };
+
+    status = spi_bus_initialize(SPI3_HOST, &spi_config, SPI_DMA_DISABLED);
+
+    if (status != ESP_OK)
+    {
+        printf("gagal melakukan konfigurasi spi\r\n");
+        while (1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    }
+
+    status = spi_bus_add_device(SPI3_HOST, &shift_register, &spi);
+
+    if (status != ESP_OK)
+    {
+        printf("gagal menambahkan device spi\r\n");
+        while (1)
+        {
+            vTaskDelay(pdMS_TO_TICKS(500));
+        }
+    }
+
+    printf("konfigurasi selesai\r\n");
 
     while (1)
     {
-        for (uint8_t i = 0; i < 128; i++)
+        for (uint8_t index = 0; index <= 6; index++)
         {
-            // create command
-            i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-
-            // add start condition
-            i2c_master_start(cmd);
-
-            // add the address of slave device
-            i2c_master_write_byte(cmd, (i << 1), true);
-
-            // add stop condition
-            i2c_master_stop(cmd);
-
-            // send the command
-            esp_err_t status = i2c_master_cmd_begin(I2C_NUM_0, cmd, pdMS_TO_TICKS(500));
-            i2c_cmd_link_delete(cmd);
-
-            if (status == ESP_OK)
-            {
-                printf("device found at 0x%.2x\r\n", i);
-                vTaskDelay(pdMS_TO_TICKS(3000));
-            }
-            else
-            {
-                printf(".\r\n");
-                vTaskDelay(pdMS_TO_TICKS(100));
-            }
+            meter_display(1, index);
+            vTaskDelay(pdMS_TO_TICKS(80));
         }
-
-        printf("scanning done, waiting to next scanning ... \r\n");
-        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
